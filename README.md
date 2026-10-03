@@ -59,3 +59,7 @@ API رسمی 3X-UI مستند شده‌اند.
 
 این پنل را عمومی و بدون احراز هویت رها نکن. برای حساب 3X-UI رمز قوی بگذار و
 در صورت امکان دسترسی مدیریتی را محدود کن.
+
+
+## Railway port
+This version is prepared for the dashboard to listen on port 2096. In Railway Variables, set `PORT=2096`, then set the generated domain Target Port to `2096`.

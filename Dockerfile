@@ -12,9 +12,9 @@ COPY scripts/start.sh /start-vpnstan.sh
 RUN chmod 755 /start-vpnstan.sh
 
 ENV VPNSTAN_WEB=/opt/vpnstan/web
-ENV VPNSTAN_PORT=3000
+ENV VPNSTAN_PORT=2096
 
-EXPOSE 3000
+EXPOSE 2096
 EXPOSE 2053
 
 

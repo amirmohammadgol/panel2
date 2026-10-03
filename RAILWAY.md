@@ -8,3 +8,7 @@
 3. اگر قبلاً یک Railway Volume به مسیر `/etc/x-ui` وصل کرده‌اید، آن را نگه دارید.
 4. در Settings > Networking یک Public Domain بسازید.
 5. اگر build خطای دیگری داد، Build Logs را باز کنید و اولین خط قرمز را ارسال کنید.
+
+
+## Port 2096
+Set the service variable `PORT=2096`, redeploy, then in Settings → Networking set the public domain Target Port to 2096.
