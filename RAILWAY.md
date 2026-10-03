@@ -1,14 +1,10 @@
-# Railway checklist for vpnstan
+# Railway deployment
 
-1. GitHub repository root must contain `Dockerfile`.
-2. Deploy the repository as a Railway service.
-3. Do not upload the ZIP itself as the repository contents.
-4. Add a Volume mounted at `/etc/x-ui`.
-5. Generate a Railway Domain.
-6. Open the domain and use the 3X-UI administrator credentials.
-7. Create/configure an Xray inbound inside 3X-UI.
-8. In vpnstan, choose that inbound and create a client with name, GB and days.
+این نسخه برای Railway اصلاح شده است. در Dockerfile از دستور Docker `VOLUME` استفاده نشده، چون Railway برای Volume از تنظیمات خود سرویس استفاده می‌کند.
 
-If Railway still reports `Dockerfile failed validation`, open **View logs** and
-copy the first actual error line. The screenshot only shows the summary and does
-not contain the parser's specific error.
+## مراحل
+1. محتویات این پوشه را در ریشه GitHub repository قرار دهید. خود فایل ZIP را داخل repository نگذارید.
+2. در Railway همان repository را Deploy کنید.
+3. اگر قبلاً یک Railway Volume به مسیر `/etc/x-ui` وصل کرده‌اید، آن را نگه دارید.
+4. در Settings > Networking یک Public Domain بسازید.
+5. اگر build خطای دیگری داد، Build Logs را باز کنید و اولین خط قرمز را ارسال کنید.

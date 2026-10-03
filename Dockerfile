@@ -17,6 +17,5 @@ ENV VPNSTAN_PORT=3000
 EXPOSE 3000
 EXPOSE 2053
 
-VOLUME ["/etc/x-ui"]
 
 ENTRYPOINT ["/start-vpnstan.sh"]
