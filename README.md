@@ -1,65 +1,18 @@
-# vpnstan
+# vpnstan — 3X-UI v2.9.0 Railway panel
 
-پنل مدیریت ساده و فارسی برای 3X-UI v2.9.0، بدون WireGuard.
-
-## هدف
-
-در داشبورد vpnstan مدیر می‌تواند:
-- وارد 3X-UI شود
-- Inboundها را ببیند
-- نوع پروتکل را انتخاب کند
-- نام، حجم و مدت اعتبار را وارد کند
-- Client را از طریق API خود 3X-UI ایجاد کند
-- اطلاعات Client و Subscription ID را ببیند
-- Clientهای موجود را فهرست کند
-
-3X-UI خودش credential مناسب پروتکل را ایجاد می‌کند. برای VLESS/VMess شناسهٔ UUID،
-برای Trojan/SS/Hysteria2 فیلدهای مخصوص همان پروتکل استفاده می‌شوند.
-
-## نکته مهم Railway
-
-این پروژه از Dockerfile ریشه استفاده می‌کند. Dockerfile از ایمیج رسمی 3X-UI v2.9.0 استفاده می‌کند و Python را برای داشبورد vpnstan به‌صورت صریح نصب می‌کند.
-برای ماندگاری دیتابیس `/etc/x-ui` یک Railway Volume با همین Mount Path اضافه کن.
-
-اما «فقط ساختن دامنه» به تنهایی تضمین نمی‌کند کانفیگ VPN از اینترنت کار کند.
-برای عبور ترافیک باید Xray روی یک نود قابل دسترسی اجرا شود و پورت/پروتکل آن
-در شبکهٔ مقصد قابل دسترسی باشد. این پروژه عمداً IP، UUID، دامنهٔ جعلی یا لینک
-ساختگی تولید نمی‌کند.
-
-اگر 3X-UI روی همین سرویس Railway اجرا شود، محدودیت‌های شبکهٔ Railway باید با
-پروتکل و پورت انتخابی سازگار باشد. برای یک نود واقعی، آدرس نود را در inbound
-تنظیم کن.
+A lightweight Persian RTL dashboard around the official 3X-UI v2.9.0 container.
 
 ## Deploy
 
-1. محتوای این Repository را در GitHub قرار بده.
-2. Railway → New Project → Deploy from GitHub Repo.
-3. Repository `vpnstan` را انتخاب کن.
-4. Railway باید `Dockerfile` ریشه را تشخیص دهد.
-5. در Settings → Networking یک Domain بساز. Railway هنگام اجرای سرویس، متغیر `PORT` را در اختیار برنامه قرار می‌دهد.
-6. در Settings → Volumes یک Volume با Mount Path `/etc/x-ui` بساز.
-7. دامنه را باز کن.
+1. Upload the contents of this folder to the **root** of your GitHub repository.
+2. Railway should detect the root `Dockerfile` automatically.
+3. Create/keep a Railway Volume mounted at `/etc/x-ui`.
+4. Deploy the service.
+5. In **Settings → Networking**, generate a domain and set its **Target Port** to `2096`.
+6. Recommended Railway variable: `PORT=2096`.
 
-## Login
+The dashboard listens on `0.0.0.0` and also listens on the Railway-injected `PORT` if it differs, which prevents a common 502 caused by a target-port mismatch.
 
-ورود داشبورد از همان حساب 3X-UI استفاده می‌کند. رمز در localStorage ذخیره نمی‌شود.
+## 3X-UI
 
-## API
-
-پنل از API داخلی 3X-UI برای:
-- `/panel/api/inbounds/list`
-- `/panel/api/inbounds/addClient`
-- `/panel/api/clients/list`
-استفاده می‌کند.
-
-ساختار Client شامل `totalGB`، `expiryTime` و `inboundIds` است؛ این فیلدها در
-API رسمی 3X-UI مستند شده‌اند.
-
-## امنیت
-
-این پنل را عمومی و بدون احراز هویت رها نکن. برای حساب 3X-UI رمز قوی بگذار و
-در صورت امکان دسترسی مدیریتی را محدود کن.
-
-
-## Railway port
-This version is prepared for the dashboard to listen on port 2096. In Railway Variables, set `PORT=2096`, then set the generated domain Target Port to `2096`.
+The underlying management service is the official `ghcr.io/mhsanaei/3x-ui:v2.9.0` image. Its internal panel/API remains on `127.0.0.1:2053` and is not the public Railway web port.

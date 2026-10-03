@@ -1,15 +1,21 @@
 import http.cookiejar
 import json
 import os
+import threading
+import time
 import urllib.parse
 import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 XUI = "http://127.0.0.1:2053"
 WEB = os.environ.get("VPNSTAN_WEB", "/opt/vpnstan/web")
+PREFERRED_PORT = int(os.environ.get("VPNSTAN_PORT", "2096"))
+ENV_PORT = int(os.environ.get("PORT", str(PREFERRED_PORT)))
 
+# The cookie jar is intentionally shared for this single-admin panel.
 jar = http.cookiejar.CookieJar()
 opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(jar))
+
 
 def xui_request(method, path, data=None, form=False):
     body = None
@@ -26,46 +32,60 @@ def xui_request(method, path, data=None, form=False):
         raw = r.read()
         return r.status, r.headers, raw
 
+
 class Handler(BaseHTTPRequestHandler):
     def _json(self, status, obj, headers=None):
         raw = json.dumps(obj, ensure_ascii=False).encode()
         self.send_response(status)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(raw)))
+        self.send_header("Cache-Control", "no-store")
         if headers:
-            for k,v in headers.items():
-                self.send_header(k,v)
+            for k, v in headers.items():
+                self.send_header(k, v)
         self.end_headers()
         self.wfile.write(raw)
 
     def _body(self):
-        n = int(self.headers.get("Content-Length","0"))
+        n = int(self.headers.get("Content-Length", "0"))
         return json.loads(self.rfile.read(n) or b"{}")
 
     def do_GET(self):
-        if self.path == "/api/health":
-            return self._json(200, {"ok": True, "name": "vpnstan", "version": "3x-ui-v2.9.0"})
-        if self.path.startswith("/api/inbounds"):
+        path = urllib.parse.urlparse(self.path).path
+
+        if path in ("/health", "/api/health"):
+            return self._json(200, {
+                "ok": True,
+                "name": "vpnstan",
+                "version": "3x-ui-v2.9.0",
+                "port": ENV_PORT,
+            })
+
+        if path.startswith("/api/inbounds"):
             try:
                 status, headers, raw = xui_request("GET", "/panel/api/inbounds/list")
                 self.send_response(status)
-                self.send_header("Content-Type", headers.get("Content-Type","application/json"))
+                self.send_header("Content-Type", headers.get("Content-Type", "application/json"))
+                self.send_header("Content-Length", str(len(raw)))
                 self.end_headers()
                 self.wfile.write(raw)
             except Exception as e:
-                self._json(502, {"success":False,"msg":"3X-UI unavailable","detail":str(e)})
+                self._json(502, {"success": False, "msg": "3X-UI unavailable", "detail": str(e)})
             return
-        if self.path.startswith("/api/clients"):
+
+        if path.startswith("/api/clients"):
             try:
                 status, headers, raw = xui_request("GET", "/panel/api/clients/list")
                 self.send_response(status)
-                self.send_header("Content-Type", headers.get("Content-Type","application/json"))
+                self.send_header("Content-Type", headers.get("Content-Type", "application/json"))
+                self.send_header("Content-Length", str(len(raw)))
                 self.end_headers()
                 self.wfile.write(raw)
             except Exception as e:
-                self._json(502, {"success":False,"msg":"3X-UI unavailable","detail":str(e)})
+                self._json(502, {"success": False, "msg": "3X-UI unavailable", "detail": str(e)})
             return
-        return self.static()
+
+        self.static()
 
     def do_POST(self):
         if self.path == "/api/login":
@@ -73,17 +93,19 @@ class Handler(BaseHTTPRequestHandler):
                 d = self._body()
                 status, headers, raw = xui_request(
                     "POST", "/login",
-                    {"username":d.get("username",""),"password":d.get("password","")},
-                    form=True
+                    {"username": d.get("username", ""), "password": d.get("password", "")},
+                    form=True,
                 )
                 self.send_response(status)
-                for c in headers.get_all("Set-Cookie", []) if headers.get_all("Set-Cookie") else []:
+                cookies = headers.get_all("Set-Cookie") or []
+                for c in cookies:
                     self.send_header("Set-Cookie", c)
-                self.send_header("Content-Type", headers.get("Content-Type","application/json"))
+                self.send_header("Content-Type", headers.get("Content-Type", "application/json"))
+                self.send_header("Content-Length", str(len(raw)))
                 self.end_headers()
                 self.wfile.write(raw)
             except Exception as e:
-                self._json(502, {"success":False,"msg":"خطا در اتصال به 3X-UI","detail":str(e)})
+                self._json(502, {"success": False, "msg": "خطا در اتصال به 3X-UI", "detail": str(e)})
             return
 
         if self.path == "/api/clients/create":
@@ -94,55 +116,82 @@ class Handler(BaseHTTPRequestHandler):
                 gb = float(d["gb"])
                 days = int(d["days"])
                 if not name or gb <= 0 or days <= 0:
-                    return self._json(400, {"success":False,"msg":"name/gb/days نامعتبر است"})
+                    return self._json(400, {"success": False, "msg": "name/gb/days نامعتبر است"})
 
-                expiry = 0 if days == 0 else __import__("time").time_ns() // 1_000_000 + days*86400000
+                expiry = int(time.time() * 1000) + days * 86400000
                 client = {
                     "email": name,
                     "totalGB": int(gb * 1024 * 1024 * 1024),
                     "expiryTime": expiry,
-                    "enable": True
+                    "enable": True,
                 }
-
-                # The official 3X-UI API expects client JSON nested inside `settings`
-                # for the inbound addClient endpoint.
-                payload = {"settings": json.dumps({"clients":[client]}, ensure_ascii=False)}
-                status, headers, raw = xui_request(
-                    "POST", f"/panel/api/inbounds/addClient",
-                    payload, form=True
-                )
+                payload = {"settings": json.dumps({"clients": [client]}, ensure_ascii=False)}
+                status, headers, raw = xui_request("POST", "/panel/api/inbounds/addClient", payload, form=True)
                 self.send_response(status)
-                self.send_header("Content-Type", headers.get("Content-Type","application/json"))
+                self.send_header("Content-Type", headers.get("Content-Type", "application/json"))
+                self.send_header("Content-Length", str(len(raw)))
                 self.end_headers()
                 self.wfile.write(raw)
             except Exception as e:
-                self._json(400, {"success":False,"msg":"ساخت Client ناموفق بود","detail":str(e)})
+                self._json(400, {"success": False, "msg": "ساخت Client ناموفق بود", "detail": str(e)})
             return
 
-        self._json(404, {"success":False,"msg":"Not found"})
+        self._json(404, {"success": False, "msg": "Not found"})
 
     def static(self):
         path = urllib.parse.urlparse(self.path).path
-        if path == "/" or path == "":
+        if path in ("", "/"):
             path = "/index.html"
         if ".." in path:
-            return self._json(400, {"error":"bad path"})
+            return self._json(400, {"error": "bad path"})
+
         full = os.path.join(WEB, path.lstrip("/"))
         if not os.path.isfile(full):
-            return self._json(404, {"error":"not found"})
-        mime = "text/plain"
-        if full.endswith(".html"): mime="text/html; charset=utf-8"
-        elif full.endswith(".js"): mime="application/javascript; charset=utf-8"
-        elif full.endswith(".css"): mime="text/css; charset=utf-8"
-        with open(full,"rb") as f: raw=f.read()
+            return self._json(404, {"error": "not found"})
+
+        mime = "text/plain; charset=utf-8"
+        if full.endswith(".html"):
+            mime = "text/html; charset=utf-8"
+        elif full.endswith(".js"):
+            mime = "application/javascript; charset=utf-8"
+        elif full.endswith(".css"):
+            mime = "text/css; charset=utf-8"
+
+        with open(full, "rb") as f:
+            raw = f.read()
         self.send_response(200)
-        self.send_header("Content-Type",mime)
-        self.send_header("Content-Length",str(len(raw)))
+        self.send_header("Content-Type", mime)
+        self.send_header("Content-Length", str(len(raw)))
+        self.send_header("Cache-Control", "no-cache")
         self.end_headers()
         self.wfile.write(raw)
 
     def log_message(self, fmt, *args):
-        print("%s - %s" % (self.address_string(), fmt % args))
+        print("%s - %s" % (self.address_string(), fmt % args), flush=True)
 
-port = int(os.environ.get("PORT", os.environ.get("VPNSTAN_PORT","3000")))
-ThreadingHTTPServer(("0.0.0.0", port), Handler).serve_forever()
+
+def serve(port):
+    server = ThreadingHTTPServer(("0.0.0.0", port), Handler)
+    print(f"vpnstan listening on 0.0.0.0:{port}", flush=True)
+    server.serve_forever()
+
+
+# Listen on the preferred 2096 and on Railway's injected PORT when different.
+# This makes the app resilient to an old Railway target-port setting.
+ports = []
+for p in (PREFERRED_PORT, ENV_PORT):
+    if 1 <= p <= 65535 and p not in ports:
+        ports.append(p)
+
+threads = []
+for p in ports:
+    t = threading.Thread(target=serve, args=(p,), daemon=True)
+    t.start()
+    threads.append(t)
+
+# Keep the main process alive and fail only if all listener threads unexpectedly die.
+while True:
+    if any(t.is_alive() for t in threads):
+        time.sleep(3600)
+    else:
+        raise SystemExit("vpnstan web listeners stopped")
